@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout codebase
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up JDK 17
         uses: actions/setup-java@v2
@@ -103,7 +103,7 @@ jobs:
 
       - name: Upload artifact
         if: github.event_name != 'release'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: HardConnectForAndroid
           path: HardConnectForAndroid.apk
