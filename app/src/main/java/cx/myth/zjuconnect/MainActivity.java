@@ -5,10 +5,8 @@ import static android.Manifest.permission.POST_NOTIFICATIONS;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -23,7 +21,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
@@ -43,37 +40,50 @@ public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;
     private NotificationManager notificationManager;
     private Notification notification;
-    private boolean isRunning = false;
-    private final BroadcastReceiver receiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            SharedPreferences prefs = getSharedPreferences("tile_prefs", Context.MODE_PRIVATE);
-            SharedPreferences.Editor editor = prefs.edit();
-            editor.putString("tile_state", intent.getAction());
-            editor.apply();
-
-            if (Objects.equals(intent.getAction(), "cx.myth.zjuconnect.LOGIN_FAILED")) {
-                isRunning = false;
-                binding.fab.setImageResource(android.R.drawable.ic_media_play);
-                Snackbar.make(binding.getRoot(), R.string.login_failed, Snackbar.LENGTH_SHORT).setAnchorView(binding.fab).show();
-                binding.fab.setEnabled(true);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    notificationManager.cancel(1);
+    private SharedPreferences mPrefs;
+    private SharedPreferences.Editor mEditor;
+    static public boolean isRunning = false;
+    private final SharedPreferences.OnSharedPreferenceChangeListener mListener = (sharedPreferences, key) -> {
+        if ("tile_state".equals(key)) {
+            String state = sharedPreferences.getString(key, "");
+            runOnUiThread(() -> {
+                switch (state) {
+                    case "cx.myth.zjuconnect.LOGIN_FAILED":
+                        isRunning = false;
+                        binding.fab.setImageResource(android.R.drawable.ic_media_play);
+                        Snackbar.make(binding.getRoot(), R.string.login_failed, Snackbar.LENGTH_SHORT).setAnchorView(binding.fab).show();
+                        binding.fab.setEnabled(true);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            notificationManager.cancel(1);
+                        }
+                        break;
+                    case "cx.myth.zjuconnect.STACK_STOPPED":
+                        isRunning = false;
+                        binding.fab.setImageResource(android.R.drawable.ic_media_play);
+                        Snackbar.make(binding.getRoot(), R.string.stopped, Snackbar.LENGTH_SHORT).setAnchorView(binding.fab).show();
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            notificationManager.cancel(1);
+                        }
+                        break;
+                    case "cx.myth.zjuconnect.LOGIN_SUCCEEDED":
+                        isRunning = true;
+                        binding.fab.setImageResource(android.R.drawable.ic_media_pause);
+                        Snackbar.make(binding.getRoot(), R.string.started, Snackbar.LENGTH_SHORT).setAnchorView(binding.fab).show();
+                        binding.fab.setEnabled(true);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            notificationManager.notify(1, notification);
+                        }
+                        break;
+                    case "cx.myth.zjuconnect.STOP_VPN":
+                        isRunning = false;
+                        binding.fab.setImageResource(android.R.drawable.ic_media_play);
+                        Snackbar.make(binding.getRoot(), R.string.stopped, Snackbar.LENGTH_SHORT).setAnchorView(binding.fab).show();
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            notificationManager.cancel(1);
+                        }
+                        break;
                 }
-            } else if (Objects.equals(intent.getAction(), "cx.myth.zjuconnect.STACK_STOPPED")) {
-                stopVpnService();
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    notificationManager.cancel(1);
-                }
-            } else if (Objects.equals(intent.getAction(), "cx.myth.zjuconnect.LOGIN_SUCCEEDED")) {
-                isRunning = true;
-                binding.fab.setImageResource(android.R.drawable.ic_media_pause);
-                Snackbar.make(binding.getRoot(), R.string.started, Snackbar.LENGTH_SHORT).setAnchorView(binding.fab).show();
-                binding.fab.setEnabled(true);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    notificationManager.notify(1, notification);
-                }
-            }
+            });
         }
     };
 
@@ -110,13 +120,11 @@ public class MainActivity extends AppCompatActivity {
 
         Intent explicitIntent = new Intent("cx.myth.zjuconnect.LOGIN_FAILED");
         explicitIntent.setPackage("cx.myth.zjuconnect");
-
-        IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction("cx.myth.zjuconnect.LOGIN_FAILED");
-        intentFilter.addAction("cx.myth.zjuconnect.STACK_STOPPED");
-        intentFilter.addAction("cx.myth.zjuconnect.LOGIN_SUCCEEDED");
-        intentFilter.addAction("cx.myth.zjuconnect.STOP_VPN");
-        LocalBroadcastManager.getInstance(this).registerReceiver(receiver, intentFilter);
+        if (mPrefs == null) {
+            mPrefs = getSharedPreferences("tile_prefs", Context.MODE_PRIVATE);
+        }
+        mEditor = mPrefs.edit();
+        mPrefs.registerOnSharedPreferenceChangeListener(mListener);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel("zjuconnect", "Notification", NotificationManager.IMPORTANCE_DEFAULT);
@@ -156,14 +164,20 @@ public class MainActivity extends AppCompatActivity {
                 if (!isRunning) {
                     startVpnService();
                 } else {
-                    LocalBroadcastManager.getInstance(this).sendBroadcast(new Intent("cx.myth.zjuconnect.STOP_VPN"));
-                    stopVpnService();
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        notificationManager.cancel(1);
-                    }
+                    mEditor.putString("tile_state", "cx.myth.zjuconnect.STOP_VPN");
+                    mEditor.apply();
                 }
             }
         });
+
+        // 更新UI状态（在打开应用前使用快捷磁贴启用VPN）
+        String state = mPrefs.getString("tile_state", "");
+        mEditor.putString("tile_state", "");
+        mEditor.apply();
+        if (isRunning) {
+            mEditor.putString("tile_state", state);
+            mEditor.apply();
+        }
     }
 
     private void startVpnService() {
@@ -195,12 +209,6 @@ public class MainActivity extends AppCompatActivity {
         editor.putString("username", ((EditText) findViewById(R.id.usernameEditText)).getText().toString());
         editor.putString("password", ((EditText) findViewById(R.id.passwordEditText)).getText().toString());
         editor.apply();
-    }
-
-    private void stopVpnService() {
-        isRunning = false;
-        binding.fab.setImageResource(android.R.drawable.ic_media_play);
-        Snackbar.make(binding.getRoot(), R.string.stopped, Snackbar.LENGTH_SHORT).setAnchorView(binding.fab).show();
     }
 
     @Override
