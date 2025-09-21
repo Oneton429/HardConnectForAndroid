@@ -59,7 +59,7 @@
                 android:id="@+id/versionTextView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Version: 0.1.0"
+                android:text="Version: 0.2.0"
                 android:textAlignment="center" />
 
             <Space

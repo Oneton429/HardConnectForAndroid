@@ -47,6 +47,11 @@ public class MainActivity extends AppCompatActivity {
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            SharedPreferences prefs = getSharedPreferences("tile_prefs", Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+            editor.putString("tile_state", intent.getAction());
+            editor.apply();
+
             if (Objects.equals(intent.getAction(), "cx.myth.zjuconnect.LOGIN_FAILED")) {
                 isRunning = false;
                 binding.fab.setImageResource(android.R.drawable.ic_media_play);
@@ -106,9 +111,12 @@ public class MainActivity extends AppCompatActivity {
         Intent explicitIntent = new Intent("cx.myth.zjuconnect.LOGIN_FAILED");
         explicitIntent.setPackage("cx.myth.zjuconnect");
 
-        LocalBroadcastManager.getInstance(this).registerReceiver(receiver, new IntentFilter("cx.myth.zjuconnect.LOGIN_FAILED"));
-        LocalBroadcastManager.getInstance(this).registerReceiver(receiver, new IntentFilter("cx.myth.zjuconnect.STACK_STOPPED"));
-        LocalBroadcastManager.getInstance(this).registerReceiver(receiver, new IntentFilter("cx.myth.zjuconnect.LOGIN_SUCCEEDED"));
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction("cx.myth.zjuconnect.LOGIN_FAILED");
+        intentFilter.addAction("cx.myth.zjuconnect.STACK_STOPPED");
+        intentFilter.addAction("cx.myth.zjuconnect.LOGIN_SUCCEEDED");
+        intentFilter.addAction("cx.myth.zjuconnect.STOP_VPN");
+        LocalBroadcastManager.getInstance(this).registerReceiver(receiver, intentFilter);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel("zjuconnect", "Notification", NotificationManager.IMPORTANCE_DEFAULT);
